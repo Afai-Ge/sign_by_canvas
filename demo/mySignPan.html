@@ -1,0 +1,257 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Document</title>
+    <script src="https://cdn.bootcdn.net/ajax/libs/vue/2.6.13/vue.min.js"></script>
+    <link rel="stylesheet" href="./index.css" />
+  </head>
+
+  <body>
+    <div id="app">
+      <div class="sign-canvas">
+        <div class="toolBar">
+          <div id="color"></div>
+          <div id="fontWeight"></div>
+        </div>
+        <canvas
+          id="canvas"
+          @mousedown="mouseDown"
+          @mousemove="mouseMove"
+          @mouseup="mouseUp"
+          ref="canvas"
+        >
+          抱歉，您的浏览器暂不支持canvas元素
+        </canvas>
+        <div class="sign-btn">
+          <button class="btn" @click="preview">预览</button>
+          <button class="btn" @click="revert">撤销</button>
+          <button class="btn" @click="clear">清空</button>
+          <button class="btn" @click="save">保存</button>
+          <button class="btn" @click="clip">裁剪</button>
+        </div>
+        <div class="preview">
+          <img src="" alt="" />
+        </div>
+      </div>
+    </div>
+  </body>
+  <script>
+    // import Vue from 'vue';
+    const app = new Vue({
+      el: "#app",
+      data: {
+        lineWidth: 3,
+        lineColor: "#343041",
+        isCrop: false,
+
+        canvasRect: null, // 宽高clientRect数据
+        ctx: null, // 画笔对象
+        startX: 0,
+        startY: 0,
+        endX: 0,
+        endY: 0,
+        storageSteps: [], // 记录每步操作
+        isDrawing: false, // 正在绘制？
+        isEmpty: false, // 画板是否为空
+
+        base64: "",
+      },
+      mounted() {
+        // this.show()
+        this.init()
+
+        document.onmouseup = () => {
+          this.isDrawing = false
+        }
+      },
+      methods: {
+        init() {
+          const canvas = this.$refs.canvas
+
+          this.canvasRect = canvas.getBoundingClientRect()
+
+          canvas.width = this.canvasRect.width
+          canvas.height = this.canvasRect.height
+
+          this.ctx = canvas.getContext("2d")
+        },
+        mouseDown(e) {
+          e.preventDefault()
+
+          this.startX =
+            e.clientX -
+            e.target.offsetLeft +
+            document.documentElement.scrollLeft
+          this.startY =
+            e.clientY - e.target.offsetTop + document.documentElement.scrollTop
+          this.endX = this.startX
+          this.endY = this.startY
+
+          this.isDrawing = true
+          this.draw()
+        },
+        mouseMove(e) {
+          e.preventDefault()
+          this.endX =
+            e.clientX -
+            e.target.offsetLeft +
+            document.documentElement.scrollLeft
+          this.endY =
+            e.clientY - e.target.offsetTop + document.documentElement.scrollTop
+          if (this.isDrawing) {
+            this.draw()
+          }
+
+          this.startX = this.endX
+          this.startY = this.endY
+        },
+        mouseUp(e) {
+          e.preventDefault()
+          this.endX = e.clientX + document.documentElement.scrollLeft
+          this.endY = e.clientY + document.documentElement.scrollTop
+
+          let imgData = this.ctx.getImageData(
+            0,
+            0,
+            this.canvasRect.width,
+            this.canvasRect.height
+          )
+
+          this.storageSteps.push(imgData)
+        },
+        draw() {
+          this.ctx.beginPath()
+          this.ctx.moveTo(this.startX, this.startY)
+          this.ctx.lineTo(this.endX, this.endY)
+          this.ctx.lineCap = "round"
+          this.ctx.lineJoin = "round"
+          this.ctx.lineWidth = this.lineWidth
+          this.ctx.strokeStyle = this.lineColor
+          this.ctx.stroke()
+          this.ctx.closePath()
+
+          this.isEmpty = false
+        },
+        preview() {
+          this.base64 = this.$refs.canvas.toDataURL("image/png")
+          // console.log(this.base64)
+
+          const img = document.querySelector(".preview img")
+          img.src = this.base64
+          img.width = this.canvasRect.width
+          img.height = this.canvasRect.height
+        },
+        revert() {
+          this.storageSteps.pop()
+          const len = this.storageSteps.length
+          if (len) {
+            this.ctx.putImageData(this.storageSteps[len - 1], 0, 0)
+          } else {
+            this.clear()
+          }
+        },
+        clear() {
+          this.ctx.clearRect(
+            0,
+            0,
+            this.canvasRect.width,
+            this.canvasRect.height
+          )
+          this.storageSteps = []
+          this.isEmpty = true
+        },
+        save() {
+          if (this.isEmpty) {
+            console.log("画布为空!")
+            return
+          }
+          // 弹窗请求文件名
+          const name = prompt("请输入名称", "签名")
+          if (name && name.trim()) {
+            const a = document.createElement("a")
+            a.download = name
+            a.href = this.base64
+            a.dispatchEvent(new MouseEvent("click"))
+          }
+        },
+        // 裁剪
+        clip() {
+          if (this.isEmpty) {
+            console.log("画布为空！")
+            return
+          }
+          const imgData = this.ctx.getImageData(
+            0,
+            0,
+            this.canvasRect.width,
+            this.canvasRect.height
+          )
+          const clipArea = this.getCropArea(imgData.data)
+          console.log(clipArea)
+
+          const _canvas = document.createElement("canvas")
+          _canvas.width = clipArea.x2 - clipArea.x1
+          _canvas.height = clipArea.y2 - clipArea.y1
+          const _ctx = _canvas.getContext("2d")
+
+          const imageData = this.ctx.getImageData(
+            clipArea.x1,
+            clipArea.y1,
+            _canvas.width,
+            _canvas.height
+          )
+          _ctx.putImageData(imageData, 0, 0)
+          this.base64 = _canvas.toDataURL("image/png")
+
+          // const name = prompt('请输入名称', 'canvas签名');
+          // if (name && name.trim()) {
+          // 	const a = document.createElement('a');
+          // 	a.download = name;
+          // 	a.href = base64;
+          // 	a.dispatchEvent(new MouseEvent('click')); // IE可能存在兼容性 可以把标签渲染出来再触发click事件
+          // }
+
+          const img = document.querySelector(".preview img")
+          img.src = this.base64
+          img.width = _canvas.width
+          img.height = _canvas.height
+        },
+        // 计算空白区域
+        getCropArea(imgData) {
+          let x1 = Math.round(this.canvasRect.width)
+          let y1 = Math.round(this.canvasRect.height)
+          let x2 = 0
+          let y2 = 0
+          console.log([x1, y1, x2, y2])
+
+          for (let i = 0; i < Math.round(this.canvasRect.width); i++) {
+            for (let j = 0; j < Math.round(this.canvasRect.height); j++) {
+              let pos = (i + Math.round(this.canvasRect.width) * j) * 4
+              if (
+                imgData[pos] > 0 ||
+                imgData[pos + 1] > 0 ||
+                imgData[pos + 2] ||
+                imgData[pos + 3] > 0
+              ) {
+                // 判断第j行第i列的像素不是透明的
+                // 找到有色彩的左上角坐标和右下角坐标
+                x1 = Math.min(i, x1)
+                y1 = Math.min(j, y1)
+                x2 = Math.max(i, x2)
+                y2 = Math.max(j, y2)
+              }
+            }
+          }
+          x1++
+          y1++
+          x2++
+          y2++
+          return { x1, y1, x2, y2 } // 由于循环是从0开始的,而我们认为的行列是从1开始的
+        },
+      },
+    })
+  </script>
+</html>
