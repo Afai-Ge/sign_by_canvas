@@ -10,5 +10,5 @@
 - 保存
 - 裁剪
 
-效果：
-[](.\static\Snipaste.png)
+效果：  
+![](.\static\Snipaste.png)
