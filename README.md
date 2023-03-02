@@ -11,4 +11,4 @@
 - 裁剪
 
 效果：  
-![](.\static\Snipaste.png)
+![手写板](static\Snipaste.png)
