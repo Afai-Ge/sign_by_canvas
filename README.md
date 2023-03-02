@@ -11,4 +11,4 @@
 - 裁剪
 
 效果：
-[png](static\Snipaste.png)
+![png](static\Snipaste.png)
